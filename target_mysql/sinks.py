@@ -162,7 +162,7 @@ class MySQLConnector(SQLConnector):
                     return cast(sqlalchemy.types.TypeEngine, mysql.BINARY())
 
             # The maximum row size for the used table type, not counting BLOBs, is 65535.
-            maxlength = jsonschema_type.get("maxLength", 1000)
+            maxlength = jsonschema_type.get("maxLength", 255)
             data_type = mysql.VARCHAR(maxlength)
             if maxlength <= 1000:
                 return cast(sqlalchemy.types.TypeEngine, mysql.VARCHAR(maxlength))
@@ -518,6 +518,10 @@ class MySQLSink(SQLSink):
         super().__init__(*args, **kwargs)
         self.logger.setLevel(logging.DEBUG)
 
+    def preprocess_record(self, record, context):
+        record = super().preprocess_record(record, context)
+        return {self.conform_name(k): v for k, v in record.items()}
+
     def process_batch(self, context: dict) -> None:
         """Process a batch with the given batch context.
         Writes a batch to the SQL target. Developers may override this method
@@ -526,7 +530,6 @@ class MySQLSink(SQLSink):
             context: Stream partition or context dictionary.
         """
         # First we need to be sure the main table is already created
-
         conformed_records = (
             [self.conform_record(record) for record in context["records"]]
             if isinstance(context["records"], list)
@@ -593,24 +596,25 @@ class MySQLSink(SQLSink):
         """
         # TODO think about sql injeciton,
         # issue here https://github.com/MeltanoLabs/target-postgres/issues/22
-
         join_keys = [self.conform_name(key, "column") for key in join_keys]
         schema = self.conform_schema(self.schema)
 
         join_condition = " and ".join(
-            [f"temp.{key} = target.{key}" for key in join_keys]
+            [f"{from_table_name}.{key} = {to_table_name}.{key}" for key in join_keys]
         )
 
-        upsert_on_condition = " and ".join(
-            [f"{key} = VALUES({key})" for key in join_keys]
+        upsert_on_condition = ", ".join(
+            [f"{to_table_name}.{key} = {from_table_name}.{key}" for key in schema["properties"].keys() if key not in join_keys]
         )
+
+        temp_table_cols = [f"{from_table_name}.{col}" for col in schema["properties"].keys()]
 
         merge_sql = f"""
             INSERT INTO {to_table_name} ({", ".join(schema["properties"].keys())})
-                SELECT {", ".join(schema["properties"].keys())}
-                FROM 
-                    {from_table_name} temp
-            ON DUPLICATE KEY UPDATE 
+                SELECT {", ".join(temp_table_cols)}
+                FROM
+                    {from_table_name}
+            ON DUPLICATE KEY UPDATE
                 {upsert_on_condition}
         """
 
