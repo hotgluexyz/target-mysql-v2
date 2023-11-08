@@ -494,6 +494,7 @@ class MySQLSink(SQLSink):
     soft_delete_column_name = "x_sdc_deleted_at"
     version_column_name = "x_sdc_table_version"
     MAX_SIZE_DEFAULT = 100
+    previous_batch_id = None
 
     # @property
     # def schema_name(self) -> Optional[str]:
@@ -522,6 +523,11 @@ class MySQLSink(SQLSink):
     def preprocess_record(self, record, context):
         record = super().preprocess_record(record, context)
         return {self.conform_name(k): v for k, v in record.items()}
+
+    def _after_process_record(self, context: dict) -> None:
+        if context.get("batch_id") != self.previous_batch_id:
+            self.logger.info(f"Processed batch: {context['batch_id']}")
+            self.previous_batch_id = context.get("batch_id")
 
     def process_batch(self, context: dict) -> None:
         """Process a batch with the given batch context.
@@ -618,8 +624,6 @@ class MySQLSink(SQLSink):
             ON DUPLICATE KEY UPDATE
                 {upsert_on_condition}
         """
-
-        self.logger.info("Merging with SQL: %s", merge_sql)
 
         self.connection.execute(merge_sql)
 
