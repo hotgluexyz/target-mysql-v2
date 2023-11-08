@@ -493,8 +493,13 @@ class MySQLSink(SQLSink):
 
     soft_delete_column_name = "x_sdc_deleted_at"
     version_column_name = "x_sdc_table_version"
-    MAX_SIZE_DEFAULT = 100
+    MAX_SIZE_DEFAULT = 1000
     previous_batch_id = None
+
+    @property
+    def max_size(self):
+        batch_size = self.config.get("batch_size")
+        return batch_size or self.MAX_SIZE_DEFAULT
 
     # @property
     # def schema_name(self) -> Optional[str]:
