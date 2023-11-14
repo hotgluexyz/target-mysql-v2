@@ -524,6 +524,7 @@ class MySQLSink(SQLSink):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.logger.setLevel(logging.DEBUG)
+        self.truncated = False
 
     def preprocess_record(self, record, context):
         record = super().preprocess_record(record, context)
@@ -551,6 +552,13 @@ class MySQLSink(SQLSink):
         join_keys = [self.conform_name(key, "column") for key in self.key_properties]
         schema = self.conform_schema(self.schema)
 
+        stream_table_config = self.config.get("table_config", {}).get(self.stream_name, None)
+
+        if stream_table_config == "truncate" and not self.truncated:
+            self.logger.info(f"Truncating Table {self.full_table_name}")
+            self.connection.execute(f"TRUNCATE TABLE {self.full_table_name}")
+            self.truncated = True
+
         if self.key_properties:
             self.logger.info(f"Preparing table {self.full_table_name}")
             self.connector.prepare_table(
@@ -577,18 +585,47 @@ class MySQLSink(SQLSink):
             )
             # Merge data from Temp table to main table
             self.logger.info(f"Merging data from temp table to {self.full_table_name}")
-            self.merge_upsert_from_table(
-                from_table_name=tmp_table_name,
-                to_table_name=self.full_table_name,
-                join_keys=join_keys,
-            )
-
+            if stream_table_config == "upsert":
+                self.merge_upsert_from_table(
+                    from_table_name=tmp_table_name,
+                    to_table_name=self.full_table_name,
+                    join_keys=join_keys,
+                )
+            else:
+                self.insert_from_table(
+                    from_table_name=tmp_table_name,
+                    to_table_name=self.full_table_name,
+                )
         else:
             self.bulk_insert_records(
                 full_table_name=self.full_table_name,
                 schema=schema,
                 records=conformed_records,
             )
+
+    def insert_from_table(self,
+        from_table_name: str,
+        to_table_name: str,
+        truncate = False
+    ) -> Optional[int]:
+
+        schema = self.conform_schema(self.schema)
+
+        temp_table_cols = [f"{from_table_name}.{col}" for col in schema["properties"].keys()]
+
+        merge_sql = f"""
+            INSERT INTO {to_table_name} ({", ".join(schema["properties"].keys())})
+                SELECT {", ".join(temp_table_cols)}
+                FROM
+                    {from_table_name}
+        """
+
+        self.connection.execute(merge_sql)
+
+        self.connection.execute("COMMIT")
+
+        self.connection.execute(f"DROP TABLE {from_table_name}")
+
 
     def merge_upsert_from_table(self,
                                 from_table_name: str,
@@ -606,14 +643,8 @@ class MySQLSink(SQLSink):
             The number of records copied, if detectable, or `None` if the API does not
             report number of records affected/inserted.
         """
-        # TODO think about sql injeciton,
-        # issue here https://github.com/MeltanoLabs/target-postgres/issues/22
         join_keys = [self.conform_name(key, "column") for key in join_keys]
         schema = self.conform_schema(self.schema)
-
-        join_condition = " and ".join(
-            [f"{from_table_name}.{key} = {to_table_name}.{key}" for key in join_keys]
-        )
 
         upsert_on_condition = ", ".join(
             [f"{to_table_name}.{key} = {from_table_name}.{key}" for key in schema["properties"].keys() if key not in join_keys]
