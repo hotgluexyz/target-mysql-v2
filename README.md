@@ -97,3 +97,25 @@ Use `poetry run` to test `target-mysql` CLI interface:
 ```bash
 poetry run target-mysql --help
 ```
+
+### Using table-config param in config.json
+
+If you want to use truncate or upsert modes, you must set the type for each table on the variable `table-config` in your config.json.
+
+The default behavior for other tables are `append`, inserting all of the new records into the same table without updating or deleting any other record.
+
+```json
+{
+    "driver": "MySQL",
+    "host": "localhost",
+    "port": "3306",
+    "database": "delph",
+    "user": "root",
+    "password": "s3cr3tp4ss",
+    "batch_size": 500,
+    "table_config": {
+        "accounts": "truncate",
+        "vendors": "append",
+    }
+}
+```
