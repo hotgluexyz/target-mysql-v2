@@ -585,16 +585,16 @@ class MySQLSink(SQLSink):
             )
             # Merge data from Temp table to main table
             self.logger.info(f"Merging data from temp table to {self.full_table_name}")
-            if stream_table_config == "upsert":
+            if stream_table_config == "insert":
+                self.insert_from_table(
+                    from_table_name=tmp_table_name,
+                    to_table_name=self.full_table_name,
+                )
+            else:
                 self.merge_upsert_from_table(
                     from_table_name=tmp_table_name,
                     to_table_name=self.full_table_name,
                     join_keys=join_keys,
-                )
-            else:
-                self.insert_from_table(
-                    from_table_name=tmp_table_name,
-                    to_table_name=self.full_table_name,
                 )
         else:
             self.bulk_insert_records(
