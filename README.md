@@ -1,6 +1,6 @@
 # target-mysql
 
-`target-mysql` is a Singer target for Oracle, Build with the [Meltano Target SDK](https://sdk.meltano.com).
+`target-mysql` is a Singer target for MySQL, Build with the [Meltano Target SDK](https://sdk.meltano.com).
 
 
 
@@ -12,30 +12,31 @@ English | [한국어](./docs/README_ko.md)
 Use PIP for installation:
 
 ```bash
-pip install thk-target-mysql
+pip install target-mysql
 ```
 
 Or use GitHub Repo:
 
 ```bash
-pipx install git+https://github.com/thkwag/target-mysql.git@main
+pipx install git+https://github.com/hotgluexyz/target-mysql.git@main
 ```
 
 ## Configuration
 
 The available configuration options for `target-mysql` are:
 
-| Configuration Options   | Description                                | Default            |
-|-------------------------|--------------------------------------------|--------------------|
-| host                    | MySQL server's hostname or IP address      |                    |
-| port                    | Port where MySQL server is running         |                    |
-| user                    | MySQL username                             |                    |
-| password                | MySQL user's password                      |                    |
-| database                | MySQL database's name                      |                    |
-| table_name_pattern      | MySQL table name pattern                   | "${TABLE_NAME}"    |
-| lower_case_table_names  | Use lowercase for table names or not       | true               |
-| allow_column_alter      | Allow column alterations or not            | false              |
-| replace_null            | Replace null values with others or not     | false              |
+| Configuration Options   | Description                                                  | Default            |
+|-------------------------|--------------------------------------------------------------|--------------------|
+| host                    | MySQL server's hostname or IP address                        |                    |
+| port                    | Port where MySQL server is running                           |                    |
+| user                    | MySQL username                                               |                    |
+| password                | MySQL user's password                                        |                    |
+| database                | MySQL database's name                                        |                    |
+| table_name_pattern      | MySQL table name pattern                                     | "${TABLE_NAME}"    |
+| lower_case_table_names  | Use lowercase for table names or not                         | true               |
+| allow_column_alter      | Allow column alterations or not                              | false              |
+| replace_null            | Replace null values with others or not                       | false              |
+| table_config            | Dictionary with specifications on insert/upsert/truncate     | {}                 |
 
 Configurations can be stored in a JSON configuration file and specified using the `--config` flag with `target-mysql`.
 
@@ -97,38 +98,24 @@ Use `poetry run` to test `target-mysql` CLI interface:
 poetry run target-mysql --help
 ```
 
-### Testing with [Meltano](https://meltano.com/)
+### Using table-config param in config.json
 
-_**Note:** This target functions within a Singer environment and does not require Meltano._
+If you want to use truncate or upsert modes, you must set the type for each table on the variable `table-config` in your config.json.
 
-Firstly, install Meltano and necessary plugins:
+The default behavior for other tables are `append`, inserting all of the new records into the same table without updating or deleting any other record.
 
-```bash
-# Install Meltano
-pipx install meltano
-
-# Initialize Meltano in this directory
-cd target-mysql
-meltano install
+```json
+{
+    "driver": "MySQL",
+    "host": "localhost",
+    "port": "3306",
+    "database": "delph",
+    "user": "root",
+    "password": "s3cr3tp4ss",
+    "batch_size": 500,
+    "table_config": {
+        "accounts": "truncate",
+        "vendors": "append",
+    }
+}
 ```
-
-Then, test and orchestrate with Meltano:
-
-```bash
-# Call tests:
-meltano invoke target-mysql --version
-
-# Or execute pipeline with Carbon Intensity sample tap:
-meltano run tap-carbon-intensity target-mysql
-```
-
-### SDK Development Guide
-
-For in-depth instructions on crafting Singer Taps and Targets using Meltano Singer SDK, see the [Development Guide](https://sdk.meltano.com/en/latest/dev_guide.html).
-
-## Reference Links
-
-- [Meltano Target SDK Documentation](https://sdk.meltano.com)
-- [Singer Specification](https://github.com/singer-io/getting-started/blob/master/docs/SPEC.md)
-- [Meltano](https://meltano.com/)
-- [Singer.io](https://www.singer.io/)
