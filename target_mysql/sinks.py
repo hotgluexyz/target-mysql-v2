@@ -709,7 +709,7 @@ class MySQLSink(SQLSink):
                 if (isinstance(val, Dict) or isinstance(val, List)):
                     val = json.dumps(val)
 
-                insert_record[column.name] = val
+                insert_record[column.name] = val.encode("utf-8") if isinstance(val, str) else val
             insert_records.append(insert_record)
 
         self.connection.execute(insert_sql, insert_records)
